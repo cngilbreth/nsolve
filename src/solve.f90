@@ -3,7 +3,7 @@ program test
   integer,  parameter :: rk = kind(1d0)
   real(rk), parameter :: pi = 3.141592653589793_rk
 
-  real(rk), parameter :: h = 1./256
+  real(rk), parameter :: h = 1._rk/256
   real(rk), parameter :: xub = 8._rk
   real(rk), parameter :: xlb = 0._rk
   integer,  parameter :: l = 1
@@ -17,19 +17,19 @@ program test
   ! Must include effective potential from orbital angular momentum here
   do i=0,n
      x = xlb + i*h
-     v(i) = 0.5d0 * x**2 + 0.5d0 * l*(l+1)/(x+t)**2
+     v(i) = 0.5_rk * x**2 + 0.5_rk * l*(l+1)/(x+t)**2
   end do
-  g = 0.5d0
+  g = 0.5_rk
 
   ! Initial values (approximate)
-  u(0) = 0.d0
+  u(0) = 0._rk
   u(1) = h**(l+1)
-  u(n) = 0.d0
+  u(n) = 0._rk
   u(n-1) = exp(-(xub)**2/2)
 
   ! Eigenvalue window
-  elb = 2.25d0
-  eub = 2.625d0
+  elb = 2.25_rk
+  eub = 2.625_rk
 
   call solve1(h,g,v,elb,eub,u,e)
   open(unit=10,file='u.dat')
@@ -136,7 +136,7 @@ contains
     isep = 0
     do i=1,n
        q(i) = (e - v(i))/G
-       s(i) = 0.d0
+       s(i) = 0._rk
        ! Select leftmost turning point
        if (q(i)*q(1) < 0 .and. isep == 0) isep = i
     end do

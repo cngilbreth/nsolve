@@ -4,8 +4,9 @@ program test
 
   real(rk) :: pi = 3.141592653589793_rk
 
-  integer, parameter  :: n = 2048
+  integer, parameter  :: n = 2048, l = 1
   real(rk) :: v(0:n), u(0:n), xlb, xub, h, x, elb, eub, e, f, g
+  real(rk) :: t = 1d-10
   integer :: i
 
   ! Bounds
@@ -14,18 +15,18 @@ program test
   ! Compute v(x)
   do i=0,n
      x = xlb + i*h
-     v(i) = 0.5d0 * x**2
+     v(i) = 0.5d0 * x**2 + 0.5d0 * l*(l+1)/(x+t)**2
   end do
   g = 0.5d0
   ! Initial values
   u(0) = 0.d0
-  u(1) = h
+  u(1) = h**(l+1)
   u(n) = 0.d0
   u(n-1) = exp(-(xub)**2/2)
-  elb = 3.25d0
-  eub = 3.625d0
+  elb = 2.25d0
+  eub = 2.625d0
 
-  call solve(h,g,v,elb,eub,u,e)
+  call solve1(h,g,v,elb,eub,u,e)
   open(unit=10,file='u.dat')
   do i=1,n
      write (10,*) i, u(i)
@@ -35,7 +36,7 @@ program test
 contains
 
 
-  subroutine solve(h,G,v,elb,eub,u,e)
+  subroutine solve0(h,G,v,elb,eub,u,e)
     implicit none
     real(rk), intent(in) :: h, G, v(:)
     real(rk), intent(inout) :: elb, eub, u(:)
@@ -76,7 +77,51 @@ contains
     !   1. emid = (xlb + xub)/2
     !   2. abs(eub - elb) < accuracy
     !   3. sign(f(elb)) .ne. sign(f(eub))
-  end subroutine solve
+  end subroutine solve0
+
+
+  subroutine solve1(h,G,v,elb,eub,u,e)
+    implicit none
+    real(rk), intent(in) :: h, G, v(:)
+    real(rk), intent(inout) :: elb, eub, u(:)
+    real(rk), intent(out) :: e
+
+    real(rk), parameter :: accuracy = 1d-12
+
+    real(rk) :: fmid, emid, flb, fub
+
+    call fnumerov1(h,g,v,elb,u,flb)
+    open(unit=10,file='ulb.dat')
+    do i=1,n
+       write (10,*) i, u(i)
+    end do
+    close(10)
+    call fnumerov1(h,g,v,eub,u,fub)
+    open(unit=11,file='uub.dat')
+    do i=1,n
+       write (11,*) i, u(i)
+    end do
+    close(11)
+    if (.not. flb*fub < 0._rk) stop "solve: Zero not properly bracketed"
+
+    do while (abs(eub - elb) > accuracy)
+       ! Try the midpoint in [xlb,xub]
+       emid = (elb + eub) * 0.5_rk
+       call fnumerov1(h,g,v,emid,u,fmid)
+       write (0,*) elb, eub, fmid
+       ! Decrease interval
+       if (fmid*flb >= 0._rk) then
+          elb = emid
+       else
+          eub = emid
+       end if
+    end do
+    e = (elb + eub) * 0.5_rk
+    ! Postconditions:
+    !   1. emid = (xlb + xub)/2
+    !   2. abs(eub - elb) < accuracy
+    !   3. sign(f(elb)) .ne. sign(f(eub))
+  end subroutine solve1
 
 
 
@@ -164,8 +209,8 @@ contains
        if (q(i)*q(1) < 0 .and. isep == 0) isep = i
     end do
     if (isep == 0) stop "No turning point found"
-    call numerov(h,q(1:isep),S(1:isep),+1,u(1:isep))
 
+    call numerov(h,q(1:isep),S(1:isep),+1,u(1:isep))
     u(1:isep) = u(1:isep)/u(isep)
     call numerov(h,q(isep:n),S(isep:n),-1,u(isep:n))
     u(isep:n) = u(isep:n)/u(isep)

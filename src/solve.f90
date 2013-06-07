@@ -4,12 +4,12 @@ program test
 
   real(rk) :: pi = 3.141592653589793_rk
 
-  integer, parameter  :: n = 512
+  integer, parameter  :: n = 2048
   real(rk) :: v(0:n), u(0:n), xlb, xub, h, x, elb, eub, e, f, g
   integer :: i
 
   ! Bounds
-  xlb = 0; xub = 4
+  xlb = 0._rk; xub = 8._rk
   h = (xub-xlb)/n
   ! Compute v(x)
   do i=0,n
@@ -19,31 +19,18 @@ program test
   g = 0.5d0
   ! Initial values
   u(0) = 0.d0
-  u(1) = 1.d-200
+  u(1) = 2._rk**(-10)
   u(n) = 0.d0
-  u(n-1) = 1.d-200
-  elb = 1.4d0
-  eub = 1.6d0
+  u(n-1) = 2._rk**(-10)
+  elb = 1.25d0
+  eub = 1.625d0
 
-   ! call fnumerov(h,g,v,elb,u,f)
-   ! do i=0,n
-   !    write (*,*) i, u(i), v(i), elb
-   ! end do
-   ! write (0,*) "flb: ", f
-
-   ! write (*,*) ''
-   ! write (*,*) ''
-   ! call fnumerov(h,g,v,eub,u,f)
-   ! write (0,*) "fub: ", f
-   ! do i=0,n
-   !    write (*,*) i, u(i)
-   ! end do
-
+  open(unit=10,file='u.dat')
   call solve(h,g,v,elb,eub,u,e)
   do i=0,n
-     write (*,*) i, u(i), v(i), e
+     write (10,*) i, u(i)
   end do
-
+  close(10)
 contains
 
 
@@ -53,19 +40,18 @@ contains
     real(rk), intent(inout) :: elb, eub, u(:)
     real(rk), intent(out) :: e
 
-    real(rk), parameter :: accuracy = 1d-10
+    real(rk), parameter :: accuracy = 1d-12
 
     real(rk) :: fmid, emid, flb, fub
 
-    call fnumerov(h,g,v,elb,u,flb)
-    call fnumerov(h,g,v,eub,u,fub)
-    write (0,*) elb, eub, flb, fub
+    call fnumerov0(h,g,v,elb,-1,u,flb)
+    call fnumerov0(h,g,v,eub,-1,u,fub)
     if (.not. flb*fub < 0._rk) stop "solve: Zero not properly bracketed"
 
     do while (abs(eub - elb) > accuracy)
        ! Try the midpoint in [xlb,xub]
        emid = (elb + eub) * 0.5_rk
-       call fnumerov(h,g,v,emid,u,fmid)
+       call fnumerov0(h,g,v,emid,-1,u,fmid)
        write (0,*) elb, eub, fmid
        ! Decrease interval
        if (fmid*flb >= 0._rk) then
@@ -83,11 +69,58 @@ contains
 
 
 
-  subroutine fnumerov(h,G,v,e,u,f)
+  subroutine fnumerov0(h,G,v,e,dir,u,f)
+    ! Numerically intergrate the homogeneous differential eigenvalue equation,
+    !   -G u''(x) + (v(x)-e)u = 0, u(0) = u0, u(inf) = uinf
+    ! from one side only, and compute a fitness function f associated with the
+    ! boundary condition.
+    ! Input:
+    !   h:       Grid step size (x(i+1)-x(i))
+    !   G:       Arbitrary constant
+    !   v:       Points v(x(i)), i=1,..,n
+    !   e:       Trial eigenvalue
+    ! Input/output:
+    !   u:       On input, u(1), u(n) are set to appropriate boundary values.
+    !            If dir = +1, u(2) is set to an initial value to begin the
+    !            integration.
+    !            If dir = -1, u(n-1) is set to an initial value to begin
+    !            the integration.
+    !            On output, u(1:n-2) or (3:n) is the numerically integrated
+    !            function. The input points are left unchanged.
+    ! Notes:
+    !   u is a solution to the equation with eigenvalue e when the fitness
+    !   function f is zero (i.e., changes sign).
+    implicit none
+    real(rk), intent(in) :: h, G, v(:), e
+    integer,  intent(in) :: dir
+    real(rk), intent(inout) :: u(:)
+    real(rk), intent(out) :: f
+
+    real(rk) :: q(size(v)), S(size(v)), u0, un
+
+
+    q = (e - v)/G
+    S = 0
+    if (dir < 0) then
+       u0 = u(1)
+       call numerov(h,q,S,dir,u)
+       f = u(1) ! should multiply by (-1)**(number of nodes)
+       u(1) = u0
+    else
+       un = u(n)
+       call numerov(h,q,S,dir,u)
+       f = u(n) ! should multiply by (-1)**(number of nodes)
+       u(n) = un
+    end if
+  end subroutine fnumerov0
+
+
+
+  subroutine fnumerov1(h,G,v,e,u,f)
     ! Numerically intergrate the homogeneous differential eigenvalue equation,
     !   -G u''(x) + (v(x)-e)u = 0, u(0) = u0, u(inf) = uinf
     ! from two sides, and compute the fitness function f associated with
-    ! matching the two solutions at a point.
+    ! matching the two solutions at a single point.
     ! Input:
     !   h:       Grid step size (x(i+1)-x(i))
     !   G:       Arbitrary constant
@@ -118,7 +151,6 @@ contains
        if (q(i)*q(1) < 0 .and. isep == 0) isep = i
     end do
     if (isep == 0) stop "No turning point found"
-
     call numerov(h,q(1:isep),S(1:isep),+1,u(1:isep))
 
     u(1:isep) = u(1:isep)/u(isep)
@@ -130,7 +162,7 @@ contains
     up  = (u(isep) - u(isep-1))/h
     up1 = (u(isep+1) - u(isep))/h
     f = up - up1
-  end subroutine fnumerov
+  end subroutine fnumerov1
 
 
 

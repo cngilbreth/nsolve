@@ -19,18 +19,19 @@ program test
   g = 0.5d0
   ! Initial values
   u(0) = 0.d0
-  u(1) = 2._rk**(-10)
+  u(1) = h
   u(n) = 0.d0
-  u(n-1) = 2._rk**(-10)
-  elb = 1.25d0
-  eub = 1.625d0
+  u(n-1) = exp(-(xub)**2/2)
+  elb = 3.25d0
+  eub = 3.625d0
 
-  open(unit=10,file='u.dat')
   call solve(h,g,v,elb,eub,u,e)
-  do i=0,n
+  open(unit=10,file='u.dat')
+  do i=1,n
      write (10,*) i, u(i)
   end do
   close(10)
+
 contains
 
 
@@ -45,7 +46,17 @@ contains
     real(rk) :: fmid, emid, flb, fub
 
     call fnumerov0(h,g,v,elb,-1,u,flb)
+    open(unit=10,file='ulb.dat')
+    do i=1,n
+       write (10,*) i, u(i)
+    end do
+    close(10)
     call fnumerov0(h,g,v,eub,-1,u,fub)
+    open(unit=11,file='uub.dat')
+    do i=1,n
+       write (11,*) i, u(i)
+    end do
+    close(11)
     if (.not. flb*fub < 0._rk) stop "solve: Zero not properly bracketed"
 
     do while (abs(eub - elb) > accuracy)
@@ -104,12 +115,14 @@ contains
     if (dir < 0) then
        u0 = u(1)
        call numerov(h,q,S,dir,u)
-       f = u(1) ! should multiply by (-1)**(number of nodes)
+       !u(1:n-2) = u(1:n-2) / sqrt(dot_product(u(1:n-2),u(1:n-2)))
+       f = u(1)
        u(1) = u0
     else
        un = u(n)
        call numerov(h,q,S,dir,u)
-       f = u(n) ! should multiply by (-1)**(number of nodes)
+       !u(3:n-1) = u(3:n-1) / sqrt(dot_product(u(3:n-1),u(3:n-1)))
+       f = u(n)
        u(n) = un
     end if
   end subroutine fnumerov0

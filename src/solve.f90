@@ -13,7 +13,6 @@ program test
   real(rk) :: v(0:n), u(0:n), x, elb, eub, e, g
   integer :: i
 
-
   ! Compute v(x)
   ! Must include effective potential from orbital angular momentum here
   do i=0,n
@@ -124,13 +123,13 @@ contains
     ! Notes:
     !   1. u is a solution to the equation with eigenvalue e when the fitness
     !      function f is zero (i.e., changes sign).
-    !   2. This routine uses a 5-point formula for the numerical derivative.
+    !   2. This routine uses a 7-point formula for the numerical derivative.
     implicit none
     real(rk), intent(in) :: h, G, v(:), e
     real(rk), intent(inout) :: u(:)
     real(rk), intent(out) :: f
 
-    real(rk) :: q(size(v)), S(size(v)), up1, up2, usave(3)
+    real(rk) :: q(size(v)), S(size(v)), up1, up2, usave(4)
     integer :: i,n,isep
 
     n = size(v)
@@ -143,16 +142,21 @@ contains
     end do
     if (isep == 0) stop "No turning point found"
 
-    call numerov(h,q(1:isep+2),S(1:isep+2),+1,u(1:isep+2))
-    u(1:isep+2) = u(1:isep+2)/u(isep)
+    ! Left solution
+    call numerov(h,q(1:isep+3),S(1:isep+3),+1,u(1:isep+3))
+    u(1:isep+3) = u(1:isep+3)/u(isep)
     ! Numerical derivative
-    up1 = (u(isep-2) - 8*u(isep-1) + 8*u(isep+1)-u(isep+2))/(12*h)
-    usave(1:3) = u(isep-2:isep)
-    call numerov(h,q(isep-2:n),S(isep-2:n),-1,u(isep-2:n))
-    u(isep-2:n) = u(isep-2:n)/u(isep)
+    up1 = (-u(isep-3) + 9*u(isep-2) - 45*u(isep-1) + 45*u(isep+1) - 9*u(isep+2) + u(isep+3))/(60*h)
+    usave(1:4) = u(isep-3:isep)
+
+    ! Right solution
+    call numerov(h,q(isep-3:n),S(isep-3:n),-1,u(isep-3:n))
+    u(isep-3:n) = u(isep-3:n)/u(isep)
     ! Numerical derivative
-    up2 = (u(isep-2) - 8*u(isep-1) + 8*u(isep+1)-u(isep+2))/(12*h)
-    u(isep-2:isep) = usave(1:3)
+    up2 = (-u(isep-3) + 9*u(isep-2) - 45*u(isep-1) + 45*u(isep+1) - 9*u(isep+2) + u(isep+3))/(60*h)
+
+    ! Restore overwritten values of u from first solution
+    u(isep-3:isep) = usave(1:4)
 
     ! Compute matching condition
     ! f = u'_<(x0)/u_<(x0) - u'_>(x0)/u_>(x0)

@@ -197,7 +197,7 @@ contains
     real(rk), intent(inout) :: u(:)
     real(rk), intent(out) :: f
 
-    real(rk) :: q(size(v)), S(size(v)), uisep, up1, up
+    real(rk) :: q(size(v)), S(size(v)), uisep, up1, up2, usave(3)
     integer :: i,n,isep
 
     n = size(v)
@@ -210,16 +210,18 @@ contains
     end do
     if (isep == 0) stop "No turning point found"
 
-    call numerov(h,q(1:isep),S(1:isep),+1,u(1:isep))
-    u(1:isep) = u(1:isep)/u(isep)
-    call numerov(h,q(isep:n),S(isep:n),-1,u(isep:n))
-    u(isep:n) = u(isep:n)/u(isep)
+    call numerov(h,q(1:isep+2),S(1:isep+2),+1,u(1:isep+2))
+    u(1:isep+2) = u(1:isep+2)/u(isep)
+    up1 = (u(isep-2) - 8*u(isep-1) + 8*u(isep+1)-u(isep+2))/(12*h)
+    usave(1:3) = u(isep-2:isep)
+    call numerov(h,q(isep-2:n),S(isep-2:n),-1,u(isep-2:n))
+    u(isep-2:n) = u(isep-2:n)/u(isep)
+    up2 = (u(isep-2) - 8*u(isep-1) + 8*u(isep+1)-u(isep+2))/(12*h)
+    u(isep-2:isep) = usave(1:3)
 
     ! Compute matching condition
     ! f = u'_<(x0)/u_<(x0) - u'_>(x0)/u_>(x0)
-    up  = (u(isep) - u(isep-1))/h
-    up1 = (u(isep+1) - u(isep))/h
-    f = up - up1
+    f = up1 - up2
   end subroutine fnumerov1
 
 

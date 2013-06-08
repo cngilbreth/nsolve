@@ -6,9 +6,13 @@ program test
   real(rk), parameter :: h = 1._rk/256
   real(rk), parameter :: xub = 8._rk
   real(rk), parameter :: xlb = 0._rk
-  integer,  parameter :: l = 1
-  integer,  parameter :: n = nint((xub-xlb)/h) + 1
+  integer,  parameter :: l = 0
+  integer,  parameter :: n = idnint((xub-xlb)/h) + 1
   real(rk), parameter :: t = 1.e-10_rk
+
+  ! Parameters for finite-range potential
+  real(rk), parameter :: x0 = 0.6_rk
+  real(rk), parameter :: v0 = -1._rk
 
   real(rk) :: v(0:n), u(0:n), x, elb, eub, e, g
   integer :: i
@@ -17,7 +21,7 @@ program test
   ! Must include effective potential from orbital angular momentum here
   do i=0,n
      x = xlb + i*h
-     v(i) = 0.5_rk * x**2 + 0.5_rk * l*(l+1)/(x+t)**2
+     v(i) = 0.5_rk * x**2 + 0.5_rk * l*(l+1)/(x+t)**2 + 0.5_rk * v0 / (x0**2 * cosh(sqrt(2._rk)*x/x0)**2)
   end do
   g = 0.5_rk
 
@@ -28,8 +32,14 @@ program test
   u(n-1) = exp(-(xub)**2/2)
 
   ! Eigenvalue window
-  elb = 2.25_rk
-  eub = 2.625_rk
+  elb = 1.8_rk
+  eub = 3.5_rk
+
+  open(unit=10,file='v.dat')
+  do i=1,n
+     write (10,*) i, v(i)
+  end do
+  close(10)
 
   call solve1(h,g,v,elb,eub,u,e)
   open(unit=10,file='u.dat')
@@ -53,8 +63,8 @@ contains
     ! Input/output:
     !   elb, eub:
     !        On input: Initial upper and lower bounds for the eigenvalue. The
-    !        [elb,eub] Must bracket exactly 1 eigenvalue, and u must have the
-    !        same number of nodes on this interval.
+    !        interval [elb,eub] Must bracket exactly 1 eigenvalue, and u must
+    !        have the same number of nodes on this interval.
     !        On output: A small interval [elb,eub] containing the eigenvalue
     !   u:   On input, u(0), u(1), u(n-1), and u(n) are set to appropriate
     !        values for starting the integrations.

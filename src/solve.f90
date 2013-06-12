@@ -2,56 +2,86 @@ program test
   implicit none
   integer,  parameter :: rk = kind(1d0)
   real(rk), parameter :: pi = 3.141592653589793_rk
-
   real(rk), parameter :: h = 1._rk/256
-  real(rk), parameter :: xub = 8._rk
-  real(rk), parameter :: xlb = 0._rk
-  integer,  parameter :: l = 0
-  integer,  parameter :: n = idnint((xub-xlb)/h) + 1
-  real(rk), parameter :: t = 1.e-10_rk
 
   ! Parameters for finite-range potential
-  real(rk), parameter :: x0 = 0.6_rk
-  real(rk), parameter :: v0 = -1._rk
+  !real(rk), parameter :: x0 = 1.0_rk
+  !real(rk), parameter :: v0 = -6.56582095_rk
 
-  real(rk) :: v(0:n), u(0:n), x, elb, eub, e, g
-  integer :: i
+  real(rk) :: elb, eub, e, v0, r0
+  integer :: ierr
 
-  ! Compute v(x)
-  ! Must include effective potential from orbital angular momentum here
-  do i=0,n
-     x = xlb + i*h
-     v(i) = 0.5_rk * x**2 + 0.5_rk * l*(l+1)/(x+t)**2 + 0.5_rk * v0 / (x0**2 * cosh(sqrt(2._rk)*x/x0)**2)
-  end do
-  g = 0.5_rk
-
-  ! Initial values (approximate)
-  u(0) = 0._rk
-  u(1) = h**(l+1)
-  u(n) = 0._rk
-  u(n-1) = exp(-(xub)**2/2)
-
-  ! Eigenvalue window
-  elb = 1.8_rk
-  eub = 3.5_rk
-
-  open(unit=10,file='v.dat')
-  do i=1,n
-     write (10,*) i, v(i)
-  end do
-  close(10)
-
-  call solve1(h,g,v,elb,eub,u,e)
-  open(unit=10,file='u.dat')
-  do i=1,n
-     write (10,*) i, u(i)
-  end do
-  close(10)
+  elb = 0.3_rk
+  eub = 0.7_rk
+  v0 = -6.56_rk
+  r0 = 1._rk
+  call solve_pt(v0,r0,h,elb,eub,e,ierr)
 
 contains
 
+  subroutine solve_pt(v0,r0,h,elb,eub,e,ierr)
+    ! Find the ground-state energy of a two particles in a harmonic trap with a
+    ! poschl-teller interaction potential.
+    ! Input:
+    !   h:  Grid spacing
+    !   n:  Number of points
+    ! Input/output:
+    !   elb, eub:  On input, initial window for eigenvalue.
+    !              On output, [elb,eub] is shrunk to a small window
+    !              containing the eigenvalue.
+    ! Output:
+    !   u:     Wavefunction evaluated at grid points u(0:n)
+    !   e:     Lowest relative-motion energy eigenvalue
+    !   ierr:  If ierr == 0, routine was successful. If err .ne. 0, unsuccessful.
+    implicit none
+    real(rk), intent(in)    :: v0, r0, h
+    real(rk), intent(inout) :: elb, eub
+    real(rk), intent(out)   :: e
+    integer,  intent(out)   :: ierr
 
-  subroutine solve1(h,G,v,elb,eub,u,e)
+    real(rk), parameter :: t = 1.e-10_rk
+    real(rk), parameter :: xub = 8._rk
+    real(rk), parameter :: xlb = 0._rk
+
+    real(rk) :: x, g
+    integer  :: i, l, n
+    real(rk), allocatable :: v(:), u(:)
+
+    n = idnint((xub-xlb)/h) + 1
+    allocate(v(0:n),u(0:n))
+
+    ! Potential v(x)
+    ! Must include effective potential from orbital angular momentum here
+    l = 0
+    do i=0,n
+       x = xlb + i*h
+       v(i) = 0.5_rk * x**2 + 0.5_rk * l*(l+1)/(x+t)**2 + 0.5_rk * v0 / (r0**2 * cosh(sqrt(2._rk)*x/r0)**2)
+    end do
+    g = 0.5_rk
+
+    ! Initial values (approximate)
+    u(0) = 0._rk
+    u(1) = h**(l+1)
+    u(n) = 0._rk
+    u(n-1) = exp(-(xub)**2/2)
+
+    open(unit=10,file='v.dat')
+    do i=1,n
+       write (10,*) i, v(i)
+    end do
+    close(10)
+
+    call solve1(h,g,v,elb,eub,u,e,ierr)
+    open(unit=10,file='u.dat')
+    do i=1,n
+       write (10,*) i, u(i)
+    end do
+    close(10)
+  end subroutine solve_pt
+
+
+
+  subroutine solve1(h,G,v,elb,eub,u,e,ierr)
     ! Find an eigenvalue e and eigenfunction u of the radial Schrodinger
     ! equation with effective potential v:
     !   -G u''(x) + (v(x)-e)u = 0,  x ≥ 0, u(0) = u0, u(inf) = uinf
@@ -75,11 +105,14 @@ contains
     real(rk), intent(in) :: h, G, v(:)
     real(rk), intent(inout) :: elb, eub, u(:)
     real(rk), intent(out) :: e
+    integer,  intent(out) :: ierr
 
     real(rk), parameter :: accuracy = 1d-12
 
     real(rk) :: fmid, emid, flb, fub
+    integer :: i, n
 
+    n = size(v)
     call fnumerov1(h,g,v,elb,u,flb)
     open(unit=10,file='ulb.dat')
     do i=1,n
@@ -92,7 +125,10 @@ contains
        write (11,*) i, u(i)
     end do
     close(11)
-    if (.not. flb*fub < 0._rk) stop "solve1: Zero not properly bracketed"
+    if (.not. flb*fub < 0._rk) then
+       ierr = 1
+       return
+    end if
 
     do while (abs(eub - elb) > accuracy)
        ! Try the midpoint in [xlb,xub]
@@ -194,7 +230,7 @@ contains
     real(rk), intent(inout) :: u(:)
 
     real(rk) :: c
-    integer :: n
+    integer :: n, i
 
     n = size(q)
     if (size(q) .ne. size(u) .or. size(q) .ne. size(S)) &

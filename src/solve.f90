@@ -8,24 +8,23 @@ program test
   !real(rk), parameter :: x0 = 1.0_rk
   !real(rk), parameter :: v0 = -6.56582095_rk
 
-  real(rk) :: elb, eub, e, v0, r0
+  real(rk) :: e, v0, r0
   integer :: ierr
 
-  elb = 0.3_rk
-  eub = 0.7_rk
   v0 = -6.56582095_rk
   r0 = 1._rk
-  call solve_pt(v0,r0,h,elb,eub,e,ierr)
+  call solve_pt(v0,r0,h,1,e,ierr)
 
 contains
 
 
-  subroutine solve_pt(v0,r0,h,elb,eub,e,ierr)
-    ! Find the ground-state energy of a two particles in a harmonic trap with a
+  subroutine solve_pt(v0,r0,h,k,e,ierr)
+    ! Find an energy eigenstate of a two particles in a harmonic trap with a
     ! poschl-teller interaction potential.
     ! Input:
     !   h:  Grid spacing
-    !   n:  Number of points
+    !   v0: Strength of interaction
+    !   k:  Number of nodes
     ! Input/output:
     !   elb, eub:  On input, initial window for eigenvalue.
     !              On output, [elb,eub] is shrunk to a small window
@@ -35,16 +34,16 @@ contains
     !   e:     Lowest relative-motion energy eigenvalue
     !   ierr:  If ierr == 0, routine was successful. If err .ne. 0, unsuccessful.
     implicit none
-    real(rk), intent(in)    :: v0, r0, h
-    real(rk), intent(inout) :: elb, eub
-    real(rk), intent(out)   :: e
-    integer,  intent(out)   :: ierr
+    real(rk), intent(in)  :: v0, r0, h
+    integer,  intent(in)  :: k
+    real(rk), intent(out) :: e
+    integer,  intent(out) :: ierr
 
     real(rk), parameter :: t = 1.e-10_rk
     real(rk), parameter :: xub = 8._rk
     real(rk), parameter :: xlb = 0._rk
 
-    real(rk) :: x
+    real(rk) :: x, elb, eub
     integer  :: i, l, n
     real(rk), allocatable :: v(:), u(:)
 
@@ -56,7 +55,7 @@ contains
     l = 0
     do i=0,n
        x = xlb + i*h
-       v(i) = 0.5_rk * x**2 + 0.5_rk * l*(l+1)/(x+t)**2 + 0.5_rk * v0 / (r0**2 * cosh(sqrt(2._rk)*x/r0)**2)
+       v(i) = 0.5_rk * x**2 !+ 0.5_rk * l*(l+1)/(x+t)**2 + 0.5_rk * v0 / (r0**2 * cosh(sqrt(2._rk)*x/r0)**2)
     end do
 
     ! Initial values (approximate)
@@ -64,6 +63,10 @@ contains
     u(1) = h**(l+1)
     u(n) = 0._rk
     u(n-1) = exp(-(xub)**2/2)
+
+    call bracket_nodes(h,v,k,u,elb,eub,ierr)
+    if (ierr .ne. 0) &
+         stop "Couldn't bracket # of nodes for wavefunction"
 
     open(unit=10,file='v.dat')
     do i=1,n
@@ -80,56 +83,118 @@ contains
   end subroutine solve_pt
 
 
-  ! subroutine bracket_nodes(h,v,k,u,elb,eub,ierr)
-  !   ! Find the largest energy interval [elb,eub] between which the wavefunction
-  !   ! has a given number of nodes.
-  !   ! Input:
-  !   !   h:  Grid spacing
-  !   !   v:   Effective potential, evaluated at grid points (must include
-  !   !        ℏ² l(l+1)/(2 m r^2) term)
-  !   !   k:   Number of nodes
-  !   !   u:   On input, u(0), u(1), u(n-1), and u(n) are set to appropriate
-  !   !        values for starting the integrations.
-  !   !        On output, the rest of u is destroyed.
-  !   ! Output:
-  !   !   elb,eub: If ierr == 0, energy window within which the wavefunction
-  !   !            has exactly k nodes.
-  !   !   ierr:  0 on success, nonzero on failure.
-  !   ! Notes:
-  !   !   This routine contains a parameter, emin, the lowest energy considered.
-  !   implicit none
+  subroutine bracket_nodes(h,v,k,u,elb,eub,ierr)
+    ! Find the largest energy interval [elb,eub] between which the wavefunction
+    ! has a given number of nodes.
+    ! Input:
+    !   h:  Grid spacing
+    !   v:  Effective potential, evaluated at grid points (must include
+    !       ℏ² l(l+1)/(2 m r^2) term)
+    !   k:  Number of nodes
+    !   u:  On input, u(0), u(1), u(n-1), and u(n) are set to appropriate
+    !       values for starting the integrations.
+    !       On output, the rest of u is destroyed.
+    ! Output:
+    !   elb,eub: If ierr == 0, energy window within which the wavefunction
+    !            has exactly k nodes.
+    !   ierr:  0 on success, nonzero on failure.
+    ! Notes:
+    !   1. This routine contains a parameter, accuracy, which determines the
+    !      accuracy of elb and eub.
+    !   2. Only works for bound states currently.
+    implicit none
+    real(rk), intent(in) :: h, v(:)
+    integer,  intent(in) :: k
+    real(rk), intent(inout) :: u(:)
+    real(rk), intent(out) :: elb,eub
+    integer,  intent(out) :: ierr
 
-  !   subroutine fnumerov1(h,v,e,u,f)
+    real(rk), parameter :: accuracy = 1.e-4_rk
 
-  ! end subroutine bracket_nodes
+    real(rk) :: elb_ub, eub_lb, emid, emin, emax
+    integer  :: count, i
+
+    real(rk) :: ulb(size(u)), uub(size(u))
+
+    ! Absolute min/max for energy window
+    ! These values are determined as the classically allowed region,
+    ! plus some wiggle room to allow a turning point to be found.
+    emin = minval(v) + abs(minval(v))*0.02
+    if (minval(v) == 0.d0) emin = 0.001_rk
+    emax = maxval(v) - abs(maxval(v))*0.02
+
+    call count_nodes1(h,v,emin,u,count)
+    if (count .ne. 0) then
+       ierr = -1
+       return
+    end if
+    call count_nodes1(h,v,emax,u,count)
+    if (count <= k) then
+       ierr = -1
+       return
+    end if
+
+    ierr = 0
+
+    ! Find accurate lower bound
+    elb = emin
+    if (k > 0) then
+       elb_ub = emax
+       do while (abs(elb - elb_ub) > accuracy)
+          ! count(elb) < k
+          ! count(elb_ub) >= k
+          emid = (elb + elb_ub)/2
+          call count_nodes1(h,v,emid,u,count)
+          if (count < k) then
+             elb = emid
+          else
+             elb_ub = emid
+             ulb = u
+          end if
+       end do
+       elb = elb_ub
+    end if
+
+    ! Find accurate upper bound
+    eub_lb = emin
+    eub = emax
+    do while (abs(eub - eub_lb) > accuracy)
+       ! count(ub_lb) <= k
+       ! count(eub) > k
+       emid = (eub + eub_lb)/2
+       call count_nodes1(h,v,emid,u,count)
+       if (count <= k) then
+          eub_lb = emid
+          uub = u
+       else
+          eub = emid
+       end if
+    end do
+    eub = eub_lb
+  end subroutine bracket_nodes
 
 
-  subroutine count_nodes1(h,n,v,e,u,count)
+  subroutine count_nodes1(h,v,e,u,count)
     ! Count the number of nodes in the two-sided integrated solution to the
     ! differential equation
     !   -(1/2) u''(x) + (v(x)-e)u = 0,  x ≥ 0, u(0) = u0, u(inf) = uinf
     implicit none
     real(rk), intent(in) :: h
-    integer,  intent(in) :: n
-    real(rk), intent(in) :: v(0:n), e
-    real(rk), intent(inout) :: u(0:n)
+    real(rk), intent(in) :: v(:), e
+    real(rk), intent(inout) :: u(:)
     integer,  intent(out) :: count
 
-    integer  :: i
+    integer  :: i, n
     real(rk) :: f
 
     call fnumerov1(h,v,e,u,f)
+    n = size(v)
     count = 0
     do i=2,n-2
        if (u(i+1)*u(i) < 0 .or. u(i) == 0) then
           count = count + 1
        end if
     end do
-    open(unit=10,file='u.dat')
-    do i=0,n
-       write (10,*) i, u(i)
-    end do
-    close(10)
   end subroutine count_nodes1
 
 
@@ -237,7 +302,7 @@ contains
        ! Select leftmost turning point
        if (q(i)*q(1) < 0 .and. isep == 0) isep = i
     end do
-    if (isep == 0) stop "No turning point found"
+    if (isep == 0 .or. isep <= 3 .or. isep >= n-3) stop "No turning point found"
 
     ! Left solution
     call numerov(h,q(1:isep+3),S(1:isep+3),+1,u(1:isep+3))

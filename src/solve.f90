@@ -2,7 +2,7 @@ program test
   implicit none
   integer,  parameter :: rk = kind(1d0)
   real(rk), parameter :: pi = 3.141592653589793_rk
-  real(rk), parameter :: h = 1._rk/256
+  real(rk), parameter :: h = 1._rk/65536
 
   ! Parameters for finite-range potential
   !real(rk), parameter :: x0 = 1.0_rk
@@ -11,10 +11,10 @@ program test
   real(rk) :: e, v0, r0
   integer :: ierr
 
-  v0 = -6.56582095_rk
-  r0 = 0.1_rk
-  !call solve_pt(v0,r0,h,0,e,ierr)
-  call findv0_pt(r0,h,0,0.5_rk,v0,ierr)
+  v0 = -4.001199914_rk
+  r0 = 0.02_rk
+  call solve_pt(v0,r0,h,0,e,ierr)
+  !call findv0_pt(r0,h,0,0.5_rk,v0,ierr)
 
 contains
 
@@ -30,12 +30,20 @@ contains
 
     real(rk), parameter :: accuracy = 1d-10
     real(rk) :: v0lb, v0ub
-    real(rk) :: emid, v0mid, elb
+    real(rk) :: emid, v0mid, elb, eub
 
     v0lb = -100._rk
     v0ub = 100._rk
 
     call solve_pt(v0lb,r0,h,k,elb,ierr)
+    call solve_pt(v0ub,r0,h,k,eub,ierr)
+
+    if ((elb-e)*(eub-e) >= 0) then
+       write (*,*) "findv0_pt: energy not bracketed"
+       ierr = -1
+       return
+    end if
+
     do while (abs(v0ub - v0lb) > accuracy)
        v0mid = (v0ub + v0lb)/2
        call solve_pt(v0mid,r0,h,k,emid,ierr)

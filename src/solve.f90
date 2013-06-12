@@ -12,10 +12,43 @@ program test
   integer :: ierr
 
   v0 = -6.56582095_rk
-  r0 = 1._rk
-  call solve_pt(v0,r0,h,1,e,ierr)
+  r0 = 0.1_rk
+  !call solve_pt(v0,r0,h,0,e,ierr)
+  call findv0_pt(r0,h,0,0.5_rk,v0,ierr)
 
 contains
+
+
+  subroutine findv0_pt(r0,h,k,e,v0,ierr)
+    implicit none
+    real(rk), intent(in) :: r0,h
+    integer,  intent(in) :: k
+    real(rk), intent(in) :: e
+    real(rk), intent(out) :: v0
+    integer,  intent(out) :: ierr
+
+
+    real(rk), parameter :: accuracy = 1d-10
+    real(rk) :: v0lb, v0ub
+    real(rk) :: emid, v0mid, elb
+
+    v0lb = -100._rk
+    v0ub = 100._rk
+
+    call solve_pt(v0lb,r0,h,k,elb,ierr)
+    do while (abs(v0ub - v0lb) > accuracy)
+       v0mid = (v0ub + v0lb)/2
+       call solve_pt(v0mid,r0,h,k,emid,ierr)
+       if ((emid-e)*(elb-e) >= 0) then
+          v0lb = v0mid
+       else
+          v0ub = v0mid
+       end if
+    end do
+    v0 = (v0lb + v0ub)/2
+
+    write (*,*) v0
+  end subroutine findv0_pt
 
 
   subroutine solve_pt(v0,r0,h,k,e,ierr)
@@ -24,7 +57,7 @@ contains
     ! Input:
     !   h:  Grid spacing
     !   v0: Strength of interaction
-    !   k:  Number of nodes
+    !   k:  Number of nodes of the wavefunction
     ! Input/output:
     !   elb, eub:  On input, initial window for eigenvalue.
     !              On output, [elb,eub] is shrunk to a small window
@@ -55,7 +88,7 @@ contains
     l = 0
     do i=0,n
        x = xlb + i*h
-       v(i) = 0.5_rk * x**2 !+ 0.5_rk * l*(l+1)/(x+t)**2 + 0.5_rk * v0 / (r0**2 * cosh(sqrt(2._rk)*x/r0)**2)
+       v(i) = 0.5_rk * x**2 + 0.5_rk * l*(l+1)/(x+t)**2 + 0.5_rk * v0 / (r0**2 * cosh(sqrt(2._rk)*x/r0)**2)
     end do
 
     ! Initial values (approximate)
@@ -119,9 +152,9 @@ contains
     ! Absolute min/max for energy window
     ! These values are determined as the classically allowed region,
     ! plus some wiggle room to allow a turning point to be found.
-    emin = minval(v) + abs(minval(v))*0.02
+    emin = minval(v) + abs(minval(v))*0.04
     if (minval(v) == 0.d0) emin = 0.001_rk
-    emax = maxval(v) - abs(maxval(v))*0.02
+    emax = maxval(v) - abs(maxval(v))*0.04
 
     call count_nodes1(h,v,emin,u,count)
     if (count .ne. 0) then

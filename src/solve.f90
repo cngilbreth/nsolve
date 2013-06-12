@@ -104,6 +104,36 @@ contains
   ! end subroutine bracket_nodes
 
 
+  subroutine count_nodes1(h,n,v,e,u,count)
+    ! Count the number of nodes in the two-sided integrated solution to the
+    ! differential equation
+    !   -(1/2) u''(x) + (v(x)-e)u = 0,  x ≥ 0, u(0) = u0, u(inf) = uinf
+    implicit none
+    real(rk), intent(in) :: h
+    integer,  intent(in) :: n
+    real(rk), intent(in) :: v(0:n), e
+    real(rk), intent(inout) :: u(0:n)
+    integer,  intent(out) :: count
+
+    integer  :: i
+    real(rk) :: f
+
+    call fnumerov1(h,v,e,u,f)
+    count = 0
+    do i=2,n-2
+       if (u(i+1)*u(i) < 0 .or. u(i) == 0) then
+          count = count + 1
+       end if
+    end do
+    open(unit=10,file='u.dat')
+    do i=0,n
+       write (10,*) i, u(i)
+    end do
+    close(10)
+  end subroutine count_nodes1
+
+
+
   subroutine solve1(h,v,elb,eub,u,e,ierr)
     ! Find an eigenvalue e and eigenfunction u of the radial Schrodinger
     ! equation with effective potential v:

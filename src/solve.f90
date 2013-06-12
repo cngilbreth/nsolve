@@ -13,11 +13,12 @@ program test
 
   elb = 0.3_rk
   eub = 0.7_rk
-  v0 = -6.56_rk
+  v0 = -6.56582095_rk
   r0 = 1._rk
   call solve_pt(v0,r0,h,elb,eub,e,ierr)
 
 contains
+
 
   subroutine solve_pt(v0,r0,h,elb,eub,e,ierr)
     ! Find the ground-state energy of a two particles in a harmonic trap with a
@@ -43,7 +44,7 @@ contains
     real(rk), parameter :: xub = 8._rk
     real(rk), parameter :: xlb = 0._rk
 
-    real(rk) :: x, g
+    real(rk) :: x
     integer  :: i, l, n
     real(rk), allocatable :: v(:), u(:)
 
@@ -57,7 +58,6 @@ contains
        x = xlb + i*h
        v(i) = 0.5_rk * x**2 + 0.5_rk * l*(l+1)/(x+t)**2 + 0.5_rk * v0 / (r0**2 * cosh(sqrt(2._rk)*x/r0)**2)
     end do
-    g = 0.5_rk
 
     ! Initial values (approximate)
     u(0) = 0._rk
@@ -71,7 +71,7 @@ contains
     end do
     close(10)
 
-    call solve1(h,g,v,elb,eub,u,e,ierr)
+    call solve1(h,v,elb,eub,u,e,ierr)
     open(unit=10,file='u.dat')
     do i=1,n
        write (10,*) i, u(i)
@@ -80,14 +80,36 @@ contains
   end subroutine solve_pt
 
 
+  ! subroutine bracket_nodes(h,v,k,u,elb,eub,ierr)
+  !   ! Find the largest energy interval [elb,eub] between which the wavefunction
+  !   ! has a given number of nodes.
+  !   ! Input:
+  !   !   h:  Grid spacing
+  !   !   v:   Effective potential, evaluated at grid points (must include
+  !   !        ℏ² l(l+1)/(2 m r^2) term)
+  !   !   k:   Number of nodes
+  !   !   u:   On input, u(0), u(1), u(n-1), and u(n) are set to appropriate
+  !   !        values for starting the integrations.
+  !   !        On output, the rest of u is destroyed.
+  !   ! Output:
+  !   !   elb,eub: If ierr == 0, energy window within which the wavefunction
+  !   !            has exactly k nodes.
+  !   !   ierr:  0 on success, nonzero on failure.
+  !   ! Notes:
+  !   !   This routine contains a parameter, emin, the lowest energy considered.
+  !   implicit none
 
-  subroutine solve1(h,G,v,elb,eub,u,e,ierr)
+  !   subroutine fnumerov1(h,v,e,u,f)
+
+  ! end subroutine bracket_nodes
+
+
+  subroutine solve1(h,v,elb,eub,u,e,ierr)
     ! Find an eigenvalue e and eigenfunction u of the radial Schrodinger
     ! equation with effective potential v:
-    !   -G u''(x) + (v(x)-e)u = 0,  x ≥ 0, u(0) = u0, u(inf) = uinf
+    !   -(1/2) u''(x) + (v(x)-e)u = 0,  x ≥ 0, u(0) = u0, u(inf) = uinf
     ! Input:
     !   h:   Grid step size
-    !   G:   Multiplier of d²u/dx² term
     !   v:   Effective potential, evaluated at grid points (must include
     !        ℏ² l(l+1)/(2 m r^2) term)
     ! Input/output:
@@ -102,7 +124,7 @@ contains
     ! Output:
     !   e:   Eigenvalue estimate, e = (elb + eub)/2
     implicit none
-    real(rk), intent(in) :: h, G, v(:)
+    real(rk), intent(in) :: h, v(:)
     real(rk), intent(inout) :: elb, eub, u(:)
     real(rk), intent(out) :: e
     integer,  intent(out) :: ierr
@@ -113,13 +135,13 @@ contains
     integer :: i, n
 
     n = size(v)
-    call fnumerov1(h,g,v,elb,u,flb)
+    call fnumerov1(h,v,elb,u,flb)
     open(unit=10,file='ulb.dat')
     do i=1,n
        write (10,*) i, u(i)
     end do
     close(10)
-    call fnumerov1(h,g,v,eub,u,fub)
+    call fnumerov1(h,v,eub,u,fub)
     open(unit=11,file='uub.dat')
     do i=1,n
        write (11,*) i, u(i)
@@ -133,7 +155,7 @@ contains
     do while (abs(eub - elb) > accuracy)
        ! Try the midpoint in [xlb,xub]
        emid = (elb + eub) * 0.5_rk
-       call fnumerov1(h,g,v,emid,u,fmid)
+       call fnumerov1(h,v,emid,u,fmid)
        write (0,*) elb, eub, fmid
        ! Decrease interval
        if (fmid*flb >= 0._rk) then
@@ -151,14 +173,13 @@ contains
 
 
 
-  subroutine fnumerov1(h,G,v,e,u,f)
+  subroutine fnumerov1(h,v,e,u,f)
     ! Numerically intergrate the homogeneous differential eigenvalue equation,
-    !   -G u''(x) + (v(x)-e)u = 0, u(0) = u0, u(inf) = uinf
+    !   - u''(x)/2 + (v(x)-e)u = 0, u(0) = u0, u(inf) = uinf
     ! from two sides, and compute the fitness function f associated with
     ! matching the two solutions at a single point.
     ! Input:
     !   h:       Grid step size (x(i+1)-x(i))
-    !   G:       Arbitrary constant
     !   v:       Points v(x(i)), i=1,..,n
     !   e:       Trial eigenvalue
     ! Input/output:
@@ -171,7 +192,7 @@ contains
     !      function f is zero (i.e., changes sign).
     !   2. This routine uses a 7-point formula for the numerical derivative.
     implicit none
-    real(rk), intent(in) :: h, G, v(:), e
+    real(rk), intent(in) :: h, v(:), e
     real(rk), intent(inout) :: u(:)
     real(rk), intent(out) :: f
 
@@ -181,7 +202,7 @@ contains
     n = size(v)
     isep = 0
     do i=1,n
-       q(i) = (e - v(i))/G
+       q(i) = (e - v(i))*2
        s(i) = 0._rk
        ! Select leftmost turning point
        if (q(i)*q(1) < 0 .and. isep == 0) isep = i

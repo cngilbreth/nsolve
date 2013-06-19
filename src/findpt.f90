@@ -1,5 +1,27 @@
-! Program for finding the interaction strength v0 for the poschl-teller
-! potential in the unitary limit.
+! findpt.f90: Program for finding the interaction strength v0 for the
+! poschl-teller potential in the unitary limit.
+! v0.6, June 19, 2013
+!
+! Copyright (c) 2013 Christopher N. Gilbreth
+!
+! Permission is hereby granted, free of charge, to any person obtaining a copy
+! of this software and associated documentation files (the "Software"), to deal
+! in the Software without restriction, including without limitation the rights
+! to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+! copies of the Software, and to permit persons to whom the Software is
+! furnished to do so, subject to the following conditions:
+!
+! The above copyright notice and this permission notice shall be included in all
+! copies or substantial portions of the Software.
+!
+! THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+! IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+! FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+! AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+! SOFTWARE.
+
 program findpt
   use solve
   implicit none
@@ -40,6 +62,9 @@ program findpt
   ! 0.02       -4.001199840
   ! 0.01       -4.000299990
   ! 0.005      -4.000074999
+
+  ! Note the window [v0lb,v0ub] must sometimes be adjusted to a narrow window
+  ! around v0 for this to work well.
 
   real(rk) :: v0
   integer :: ierr

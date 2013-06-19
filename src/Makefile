@@ -4,13 +4,13 @@ FC = gfortran -cpp -Wall -Wextra
 vpath ho ../bin
 vpath pt ../bin
 
-ho: solve.o ho.o
+ho: nsolve.o ho.o
 	$(FC) -o ../bin/$@ $+
 
-pt: solve.o pt.o
+pt: nsolve.o pt.o
 	$(FC) -o ../bin/$@ $+
 
-findpt: solve.o findpt.o
+findpt: nsolve.o findpt.o
 	$(FC) -o ../bin/$@ $+
 
 .PHONY: check

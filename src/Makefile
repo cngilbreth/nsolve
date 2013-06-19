@@ -2,13 +2,13 @@ FC = gfortran -cpp -Wall -Wextra
 #FC = gfortran -cpp -Wall -Wextra -g -fbounds-check
 
 ho: solve.o ho.o
-	$(FC) -o $@ $+
+	$(FC) -o ../bin/$@ $+
 
 pt: solve.o pt.o
-	$(FC) -o $@ $+
+	$(FC) -o ../bin/$@ $+
 
 findpt: solve.o findpt.o
-	$(FC) -o $@ $+
+	$(FC) -o ../bin/$@ $+
 
 .PHONY: tags
 tags:

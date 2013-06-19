@@ -8,6 +8,7 @@ diff pt.dat /tmp/expected
 if [ $? -ne 0 ]; then
     echo "failed!"
     diff -y pt.dat /tmp/expected
+    exit 1
 else
     echo "passed"
 fi

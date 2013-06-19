@@ -5,11 +5,11 @@ nsolve is a small Fortran code for finding energy eigenvalues and eigenfunctions
 
 Contents:
 
-  solve.f90: Main code for doing the Numerov method and finding eigenvalues & wavefunctions
+ - solve.f90: Main code for doing the Numerov method and finding eigenvalues & wavefunctions
   
-  ho.f90: Example program for the 3d harmonic oscillator (radial equation)
+ - ho.f90: Example program for the 3d harmonic oscillator (radial equation)
   
-  pt.f90: Example program for two particles in a harmonic trap interacting via a Poschl-Teller (inverse cosh^2) potential
+ - pt.f90: Example program for two particles in a harmonic trap interacting via a Poschl-Teller (inverse cosh^2) potential
   
 Notes:
 

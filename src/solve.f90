@@ -1,3 +1,5 @@
+! Module for solving the 1-dimension Schrodinger equation, e.g., the radial
+! equation for a central potential.
 module solve
   implicit none
 
@@ -8,77 +10,17 @@ module solve
   real(rk), parameter, private :: node_accuracy = 1.e-4_rk
   ! Accuracy with which to determine the eigenvalues
   real(rk), parameter, private :: eval_accuracy = 1.e-12_rk
-  ! Interval [xlb,xub] over which to solve the Schrodinger eqn
-  real(rk), parameter, private :: xlb = 0._rk
-  real(rk), parameter, private :: xub = 8._rk
-  ! A small parameter for computing l(l+1)/(2 m r^2 + t)
-  real(rk), parameter, private :: t = 1.e-10_rk
   ! Maximum window [node_emin,node_emax] for bracketing wavefunction with
   ! a fixed number of nodes
   real(rk), parameter, private :: node_emin = -100._rk
   real(rk), parameter, private :: node_emax = 100._rk
 
+  public :: bracket_nodes2, solve2
+
 contains
 
 
-  subroutine solve_pt(v0,r0,h,k,e,ierr)
-    ! Find an energy eigenstate of a two particles in a harmonic trap with a
-    ! poschl-teller interaction potential.
-    ! Input:
-    !   v0: Strength of interaction
-    !   r0: Range of interaction
-    !   h:  Grid spacing
-    !   k:  Number of nodes of the wavefunction
-    ! Output:
-    !   e:     Lowest relative-motion energy eigenvalue
-    !   ierr:  If ierr == 0, routine was successful. If err .ne. 0,
-    !          unsuccessful.
-    implicit none
-    real(rk), intent(in)  :: v0, r0, h
-    integer,  intent(in)  :: k
-    real(rk), intent(out) :: e
-    integer,  intent(out) :: ierr
-
-    real(rk) :: x, elb, eub
-    integer  :: i, l, n
-    real(rk), allocatable :: v(:), u(:)
-
-    write (0,'(a,es20.10,a)') &
-         "Solving PT equation with v0 = ", v0, " ... "
-
-    n = idnint((xub-xlb)/h) + 1
-    allocate(v(0:n),u(0:n))
-
-    ! Potential v(x)
-    ! Must include effective potential from orbital angular momentum here
-    l = 0
-    do i=0,n
-       x = xlb + i*h
-       v(i) = 0.5_rk * x**2 + 0.5_rk * l*(l+1)/(x+t)**2 &
-            + 0.5_rk * v0 / (r0**2 * cosh(sqrt(2._rk)*x/r0)**2)
-    end do
-
-    ! Initial values (approximate)
-    u(0) = 0._rk
-    u(1) = h**(l+1)
-    u(n) = 0._rk
-    u(n-1) = exp(-(xub)**2/2)
-
-    ! Determine energy window [elb,eub] within which the two-sided wavefunction
-    ! determined by the Numerov method has exactly k nodes
-    call bracket_nodes(h,v,k,u,elb,eub,ierr)
-    if (ierr .ne. 0) then
-       write (0,*) "Couldn't bracket # of nodes for wavefunction"
-       return
-    end if
-    !elb = 0.3
-    !eub = 0.7
-
-    call solve1(h,v,elb,eub,u,e,ierr)
-  end subroutine solve_pt
-
-
-  subroutine bracket_nodes(h,v,k,u,elb,eub,ierr)
+  subroutine bracket_nodes2(h,v,k,u,elb,eub,ierr)
     ! Find the largest energy interval [elb,eub] between which the wavefunction
     ! has a given number of nodes.
     ! Input:
@@ -94,9 +36,9 @@ contains
     !            has exactly k nodes.
     !   ierr:  0 on success, nonzero on failure.
     ! Notes:
-    !   1. This routine contains a parameter, accuracy, which determines the
-    !      accuracy of elb and eub.
-    !   2. Only works for bound states currently.
+    !   1. Only works for bound states currently.
+    !   2. Can have difficulty with highly singular potentials.
+    !   3. It assumes the number of nodes is a monotonic function of the energy.
     implicit none
     real(rk), intent(in) :: h, v(:)
     integer,  intent(in) :: k
@@ -109,12 +51,12 @@ contains
 
     ! Absolute min/max for energy window
     ! These values are determined as the classically allowed region,
-    ! plus some wiggle room to allow a turning point to be found.
+    ! plus some wiggle room.
     emin = max(node_emin, minval(v) + abs(minval(v))*0.1)
     if (abs(emin) < 1E-12_rk) emin = 0.0001_rk
     emax = min(node_emax, maxval(v) - abs(maxval(v))*0.1)
 
-    call count_nodes1(h,v,emin,u,count)
+    call count_nodes2(h,v,emin,u,count)
     if (count .ge. max(k,1)) then
        write (0,'(1x,a,i0,a)') &
             "Error in bracket_nodes: Can't bracket all ", k, "-node &
@@ -132,7 +74,7 @@ contains
        return
     end if
 
-    call count_nodes1(h,v,emax,u,count)
+    call count_nodes2(h,v,emax,u,count)
     if (count <= k) then
        write (0,'(1x,a,i0,a)') &
             "Can't bracket all ", k, "-node wavefunctions within [emin,emax]"
@@ -159,7 +101,7 @@ contains
           ! count(elb) < k
           ! count(elb_ub) >= k
           emid = (elb + elb_ub)/2
-          call count_nodes1(h,v,emid,u,count)
+          call count_nodes2(h,v,emid,u,count)
           if (count < k) then
              elb = emid
           else
@@ -176,7 +118,7 @@ contains
        ! count(ub_lb) <= k
        ! count(eub) > k
        emid = (eub + eub_lb)/2
-       call count_nodes1(h,v,emid,u,count)
+       call count_nodes2(h,v,emid,u,count)
        if (count <= k) then
           eub_lb = emid
        else
@@ -184,10 +126,10 @@ contains
        end if
     end do
     eub = eub_lb
-  end subroutine bracket_nodes
+  end subroutine bracket_nodes2
 
 
-  subroutine count_nodes1(h,v,e,u,count)
+  subroutine count_nodes2(h,v,e,u,count)
     ! Count the number of nodes in the two-sided integrated solution to the
     ! differential equation
     !   -(1/2) u''(x) + (v(x)-e)u = 0,  x ≥ 0, u(0) = u0, u(inf) = uinf
@@ -200,7 +142,7 @@ contains
     integer  :: i, n
     real(rk) :: f
 
-    call fnumerov1(h,v,e,u,f)
+    call fnumerov2(h,v,e,u,f)
     n = size(v)
     count = 0
     ! We assume "nodes" are not right at the edges. If they are, need to
@@ -210,11 +152,11 @@ contains
           count = count + 1
        end if
     end do
-  end subroutine count_nodes1
+  end subroutine count_nodes2
 
 
 
-  subroutine solve1(h,v,elb,eub,u,e,ierr)
+  subroutine solve2(h,v,elb,eub,u,e,ierr)
     ! Find an eigenvalue e and eigenfunction u of the radial Schrodinger
     ! equation,
     !    -(1/2) u''(x) + (v(x)-e)u = 0,  x ≥ 0, u(0) = u0, u(inf) = uinf
@@ -245,9 +187,9 @@ contains
 
     n = size(v)
 
-    call fnumerov1(h,v,elb,u,flb)
+    call fnumerov2(h,v,elb,u,flb)
 
-    call fnumerov1(h,v,eub,u,fub)
+    call fnumerov2(h,v,eub,u,fub)
 
     if (.not. flb*fub < 0._rk) then
        write (0,*) "Error in solve1: eigenvalue not bracketed in [elb,eub]"
@@ -276,8 +218,8 @@ contains
     do while (abs(eub - elb) > eval_accuracy)
        ! Try the midpoint in [xlb,xub]
        emid = (elb + eub) * 0.5_rk
-       call fnumerov1(h,v,emid,u,fmid)
-       write (0,*) elb, eub, fmid
+       call fnumerov2(h,v,emid,u,fmid)
+       write (*,*) elb, eub, fmid
        ! Decrease interval
        if (fmid*flb >= 0._rk) then
           elb = emid
@@ -296,11 +238,11 @@ contains
        write (10,*) i, u(i)
     end do
     close(10)
-  end subroutine solve1
+  end subroutine solve2
 
 
 
-  subroutine fnumerov1(h,v,e,u,f)
+  subroutine fnumerov2(h,v,e,u,f)
     ! Numerically intergrate the homogeneous differential eigenvalue equation,
     !   - u''(x)/2 + (v(x)-e)u = 0, u(0) = u0, u(inf) = uinf
     ! from two sides, and compute the fitness function f associated with
@@ -336,7 +278,7 @@ contains
        if (q(i)*q(1) < 0 .and. isep == 0) isep = i
     end do
     if (isep == 0 .or. isep <= 3 .or. isep >= n-3) then
-       write (0,*) "fnumerov1(): No turning point found."
+       write (0,*) "fnumerov2(): No turning point found."
        stop
     end if
 
@@ -359,7 +301,7 @@ contains
     ! Compute matching condition
     ! f = u'_<(x0)/u_<(x0) - u'_>(x0)/u_>(x0)
     f = up1 - up2
-  end subroutine fnumerov1
+  end subroutine fnumerov2
 
 
 
@@ -390,6 +332,7 @@ contains
     c = h**2/12._rk
 
     ! Eq. (3.8) in Koonin and Meredith
+    ! TODO: Use compensated summation for this
     if (dir > 0) then
        ! GIVEN: u(1), u(2)
        do i=2,n-1

@@ -23,7 +23,7 @@ program ho
 
   call solve_ho(h,l,nodes,e,ierr)
   if (ierr .eq. 0) then
-     write (*,*) "e: ", e
+     write (*,*) "energy: ", e
   else
      write (*,*) "Error"
   end if

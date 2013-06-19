@@ -29,7 +29,7 @@ program pt
 
   call solve_pt(h,l,nodes,e,ierr)
   if (ierr .eq. 0) then
-     write (*,*) "e: ", e
+     write (*,*) "energy: ", e
   else
      write (*,*) "Error"
   end if
@@ -78,7 +78,7 @@ contains
     ! Determine the energy window [elb,eub] within which the two-sided
     ! wavefunction (not eigenfunction) determined by the Numerov method has
     ! exactly k nodes
-    call bracket_nodes2(h,v,nodes,u,elb,eub,ierr)
+    call bracket_nodes2(h,v,k,u,elb,eub,ierr)
     if (ierr .ne. 0) then
        write (0,*) "Couldn't bracket # of nodes for wavefunction"
        return

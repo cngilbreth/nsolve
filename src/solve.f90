@@ -207,19 +207,20 @@ contains
        close(10)
        ierr = 1
        return
-       open(unit=11,file='uub.dat')
+       open(unit=10,file='uub.dat')
        write (10,'(a,es20.10)') "# eub: ", eub
        do i=1,n
-          write (11,*) i, u(i)
+          write (10,*) i, u(i)
        end do
-       close(11)
+       close(10)
     end if
 
+    write (*,'(a,a25,tr2,a25,tr4,a13)') '#', "elb", "eub", "f(midpoint)"
     do while (abs(eub - elb) > eval_accuracy)
        ! Try the midpoint in [xlb,xub]
        emid = (elb + eub) * 0.5_rk
        call fnumerov2(h,v,emid,u,fmid)
-       write (*,*) elb, eub, fmid
+       write (*,'(a,es25.16,tr2,es25.16,tr4,es13.5)') '#', elb, eub, fmid
        ! Decrease interval
        if (fmid*flb >= 0._rk) then
           elb = emid
@@ -232,12 +233,13 @@ contains
     !   1. emid = (xlb + xub)/2
     !   2. abs(eub - elb) < accuracy
     !   3. sign(f(elb)) .ne. sign(f(eub))
-
     open(unit=10,file='u.dat')
+    write (10,'(a)') '#  index            u(index)'
     do i=1,n
-       write (10,*) i, u(i)
+       write (10,'(i8,es20.10)') i, u(i)
     end do
     close(10)
+    write (*,'(a)') "# wavefunction written to u.dat"
   end subroutine solve2
 
 
